@@ -57,7 +57,6 @@ Fabric-FinDataOps/
 │
 ├── data/
 │    ├── trade_blotter.csv
-│    ├── trade_blotter_schema.json
 │    └── datacontract.yaml
 │
 ├── notebooks/

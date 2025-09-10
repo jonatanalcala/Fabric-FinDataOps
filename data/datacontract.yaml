@@ -1,62 +1,541 @@
-openDataContract: 0.9.0
+dataContractSpecification: 1.1.0
+id: urn:datacontract:sixrings:capital-markets.execution:trade_blotter_csv
+
 info:
-  title: Equity Trade Blotter
-  version: "1.0.0"
-  owner: trading-ops
-  domain: execution
-  description: Synthetic trade blotter for execution analytics and governance demos.
+  title: Six Rings – Equity Trade Blotter
+  version: 1.1.0
+  description: |
+    CSV-based equity trade blotter used for governance, best-execution, CAT, and AML analytics.
+    Backed by Microsoft Fabric Lakehouse and governed by this data contract.
+  owner: TradeOps Team
+  status: active
+  contact:
+    name: Jonatan Alcala (Trade Ops Engineer)
+    email: jonatanalcala123@gmail.com
 servers:
-  - id: s3-dev
-    type: object-store
-    url: s3://rb-dev/trades/
-datasets:
-  - id: equity_trade_blotter
-    schema: ./trade_blotter_schema.json
-    partitions:
-      - trade_date
-    classification: Confidential
-    slas:
-      availability: 99.9
-      freshness: PT5M
-    consumers:
-      - analytics
-      - compliance
-      - risk
-policies:
-  rbac:
-    roles:
+  production:
+    type: lakehouse
+    environment: fabric
+    location: onelake://1259_DASC_31003/Alcala_J/Files/datasets/trade_blotter.csv
+    format: csv
+    delimiter: ","
+    description: >
+      Production Microsoft Fabric Lakehouse environment for the Six Rings Trade Blotter.
+      Stores all trade capture records (1M+ rows daily) in CSV format with governance
+      enforced via this data contract.
+    roles: 
       - name: trader
+        description: View own-book analytics; no PII; export limited.
         read: true
         write: false
-        pii_masked: true
+        pii_masked: true 
       - name: compliance
+        description: Full read for surveillance, CAT/AML, best-ex reviews.
         read: true
         write: false
         pii_masked: false
-      - name: devops
+      - name: data_engineering
+        description: Pipeline maintenance and quality remediation.
         read: true
         write: true
         pii_masked: true
-  retention:
-    hot: P30D
-    warm: P365D
-    cold: P1825D
-quality:
-  rules:
-    - name: positive_price
-      severity: error
-      expression: price > 0
-    - name: fill_le_order
-      severity: error
-      expression: fill_qty <= order_qty
-    - name: time_ordering
-      severity: warn
-      expression: receive_time_utc <= exec_time_utc
+      - name: devops
+        description: Infra, storage, ACLs, and monitoring.
+        read: true
+        write: true
+        pii_masked: true
+      - name: product_owner
+        description: Read access for roadmap, KPIs, and governance reports.
+        read: true
+        write: false
+        pii_masked: true
+terms: 
+  usage: |
+    This dataset (trade blotter) is provided strictly for compliance, surveillance, 
+    analytics, and operational risk monitoring. 
+    Data may be used for:
+      - Trade surveillance (CAT, AML, Reg SHO, Best Ex).
+      - Compliance audits and regulatory reporting (SEC, FINRA).
+      - Transaction Cost Analysis (TCA) and best execution reviews.
+      - Client suitability and Reg BI monitoring.
+      - Internal risk management and supervisory controls.
+    Usage outside of approved compliance, audit, and analytics functions is prohibited.
+  limitations: |
+    - Data must not be exported or shared outside authorized systems or users.
+    - PII must remain masked except for compliance-approved personnel.
+    - No use for personal trading, client solicitation, or commercial resale.
+    - Access is restricted to approved roles under the RBAC model.
+    - Derived datasets must preserve lineage and maintain compliance checkpoints.
+    - Any access or transformation must be logged and subject to periodic review.
+  policies:
+    - name: Recordkeeping (SEC 17a-3/4)
+      description: Maintain immutable, searchable records of all trades with compliant retention.
+      url: https://www.sec.gov/rules/final/34-44992.htm
+
+    - name: Best Execution (FINRA 5310 / Reg NMS 605/606)
+      description: Duty to seek best execution; monitor execution quality; provide disclosures.
+      url: https://www.finra.org/rules-guidance/rulebooks/finra-rules/5310
+
+    - name: Suitability & Reg BI (FINRA 2111 / SEC Reg BI)
+      description: Ensure recommendations and executions for retail accounts are in the customer’s best interest.
+      url: https://www.sec.gov/regulation-best-interest
+
+    - name: Consolidated Audit Trail (SEC Rule 613)
+      description: Full lifecycle reporting of orders and executions with clock synchronization.
+      url: https://www.catnmsplan.com/
+
+    - name: AML / Bank Secrecy Act (31 CFR 1023)
+      description: Monitor, detect, and report suspicious activity; implement customer due diligence.
+      url: https://www.fincen.gov/resources/statutes-regulations/bank-secrecy-act
+
+classification_policy:
+  levels:
+    public:
+      description: Non-sensitive market data that may be shared internally without restriction.
+    internal:
+      description: Operational fields needed for day-to-day analytics; not for external sharing.
+    confidential:
+      description: Sensitive firm operational data (e.g., commissions, broker/algo) with restricted distribution.
+    restricted:
+      description: PII or highly sensitive client data. Access requires explicit Compliance approval.
+  enforcement:
+    field_policies:
+      restricted:
+        mask_with: HASH_SHA256            # could be NULL, TOKENIZE, PARTIAL
+        roles_exempt: ["compliance"]      # only Compliance can see raw values
+      confidential:
+        mask_with: PARTIAL
+        roles_exempt: ["compliance","data_engineering"]
+      internal:
+        mask_with: NONE
+        roles_exempt: ["*"]
+      public:
+        mask_with: NONE
+        roles_exempt: ["*"]
+
+access_workflow:
+  request:
+    channel: "ServiceNow (or Fabric access form)"
+    required_fields: ["justification","role_requested","dataset_id","duration"]
+  approval:
+    steps:
+      - name: Manager Approval
+        approver: "${requester.manager}"
+      - name: Data Owner Approval
+        approver: "TradeOps Team"
+      - name: Compliance Review (Restricted/Confidential only)
+        approver: "Compliance"
+        condition: "role_requested in ['compliance','data_engineering'] or data_classification in ['restricted','confidential']"
+  provisioning:
+    method: "IaC via DevOps (ACL updates, masking policies)"
+    sla: "1 business day"
+  recertification:
+    frequency: P90D
+    process: "Quarterly access recertification by Data Owner + Compliance"
+  deprovisioning:
+    triggers: ["role change","contract end","inactivity > 90d"]
+    action: "Revoke role bindings; disable tokens; log in audit trail"
+
+models:
+  trade_blotter:
+    description: One record per execution (fill or partial fill) captured from the OMS/broker drop copy.
+    type: table
+    owner: Jonatan Alcala (Trade Ops Engineer)
+    tags: ["equities", "execution", "governance", "cat", "best-ex", "aml"]
+    fields:
+
+      trade_id:
+        description: Unique identifier for the execution record.
+        $ref: '#/definitions/trade_id'
+        required: true
+        unique: true
+        primaryKey: true
+        classification: internal
+        examples: ["f4b1d9b4d09d41b590d40afda177f814"]
+
+      parent_order_id:
+        description: Identifier for the parent order to which this execution belongs.
+        type: string
+        required: true
+        classification: internal
+        examples: ["064a72d57f2644d59c8a920a57d95c2f"]
+
+      child_order_id:
+        description: Optional child/slice identifier (e.g., for partial fills or algo-slices).
+        type: string
+        required: false
+        classification: internal
+        examples: ["356850cd4ac442ba84b7106fcac5f482"]
+
+      acct_id:
+        description: Internal account identifier used for allocations and reporting.
+        type: string
+        required: true
+        classification: confidential
+        examples: ["ACC340381"]
+
+      client_id:
+        description: Client identifier used for suitability and AML linkage (PII masked for non-compliance roles).
+        type: string
+        required: true
+        pii: true
+        classification: restricted
+        examples: ["CLI90979"]
+
+      trader_id:
+        description: Associated person (registered rep) responsible for handling/entering the order.
+        type: string
+        required: true
+        classification: confidential
+        examples: ["TR6549"]
+
+      instrument:
+        description: Equity symbol/ticker (uppercase).
+        type: string
+        pattern: "^[A-Z.]{1,8}$"
+        required: true
+        classification: public
+        examples: ["AAPL", "BRK.B"]
+
+      venue:
+        description: Execution venue/destination.
+        type: string
+        enum: ["NYSE","NASDAQ","ARCA","IEX","EDGX","BATS"]
+        required: true
+        classification: public
+        examples: ["NASDAQ"]
+
+      side:
+        description: Buy/Sell indicator.
+        type: string
+        enum: ["BUY","SELL"]
+        required: true
+        classification: internal
+        examples: ["BUY"]
+
+      order_type:
+        description: Order instruction type.
+        type: string
+        enum: ["LIMIT","MARKET","ICEBERG","PEG","MIDPOINT","POST_ONLY"]
+        required: true
+        classification: internal
+        examples: ["LIMIT"]
+
+      tif:
+        description: Time in force.
+        type: string
+        enum: ["DAY","IOC","FOK","GTC"]
+        required: true
+        classification: internal
+        examples: ["DAY"]
+
+      currency:
+        description: Trading currency (ISO code).
+        type: string
+        enum: ["USD"]
+        required: true
+        classification: public
+        examples: ["USD"]
+
+      order_qty:
+        description: Original ordered quantity (shares).
+        type: integer
+        minimum: 1
+        required: true
+        classification: internal
+        examples: [1000]
+
+      fill_qty:
+        description: Executed quantity (shares).
+        type: integer
+        minimum: 0
+        required: true
+        classification: internal
+        examples: [750]
+
+      price:
+        description: Execution price (per share).
+        type: number
+        minimum: 0.0001
+        format: decimal
+        required: true
+        classification: internal
+        examples: [187.53]
+
+      gross_notional:
+        description: Notional = fill_qty * price (rounded to cents).
+        type: number
+        minimum: 0.0
+        format: decimal
+        required: true
+        classification: internal
+        examples: [140647.50]
+
+      commission_bps:
+        description: Commission in basis points applied to notional.
+        type: number
+        minimum: 0.0
+        maximum: 100.0
+        required: true
+        classification: confidential
+        examples: [2.5]
+
+      commission:
+        description: Monetary commission (currency in `currency`).
+        type: number
+        minimum: 0.0
+        format: decimal
+        required: true
+        classification: confidential
+        examples: [35.16]
+
+      slippage_bps:
+        description: Slippage vs benchmark (bps). Positive = worse than benchmark.
+        type: number
+        required: true
+        classification: internal
+        examples: [4.2]
+
+      receive_time_utc:
+        description: OMS receive timestamp in UTC (business timestamp).
+        type: timestamp
+        required: true
+        classification: internal
+        examples: ["2025-02-24T14:05:23.412Z"]
+        tags: ["business-timestamp"]
+
+      exec_time_utc:
+        description: Execution timestamp in UTC from venue/broker.
+        type: timestamp
+        required: true
+        classification: internal
+        examples: ["2025-02-24T14:05:24.983Z"]
+        tags: ["business-timestamp"]
+
+      latency_ms:
+        description: Execution latency in milliseconds (exec - receive).
+        type: number
+        minimum: 0.0
+        required: true
+        classification: internal
+        examples: [1571.0]
+
+      algo_tag:
+        description: Algo family used for execution.
+        type: string
+        enum: ["VWAP","TWAP","POV","SNIPER","DARKPOOL","SOR","MANUAL"]
+        required: true
+        classification: confidential
+        examples: ["VWAP"]
+
+      broker:
+        description: Executing broker mnemonic.
+        type: string
+        enum: ["GS","MS","JPM","BAC","CITI","UBS","CS","BARC","DB","BAML"]
+        required: true
+        classification: confidential
+        examples: ["JPM"]
+
+      status:
+        description: Execution status.
+        type: string
+        enum: ["FILLED","PARTIAL","CANCELLED"]
+        required: true
+        classification: internal
+        examples: ["FILLED"]
+
+      liquidity_flag:
+        description: Maker/Taker indicator at execution.
+        type: string
+        enum: ["ADD","REMOVE"]
+        required: true
+        classification: internal
+        examples: ["REMOVE"]
+
+      country:
+        description: Market/regulatory country code.
+        type: string
+        enum: ["US"]
+        required: true
+        classification: public
+        examples: ["US"]
+
+      trade_date:
+        description: Trade date (T) in ISO date.
+        type: date
+        required: true
+        classification: internal
+        examples: ["2025-02-24"]
+
+      settlement_date:
+        description: Contractual settlement date (T+1) in ISO date.
+        type: date
+        required: true
+        classification: internal
+        examples: ["2025-02-25"]
+
+      processed_timestamp:
+        description: Platform processing timestamp for lineage/audit.
+        type: timestamp
+        required: true
+        classification: internal
+        config:
+          jsonType: string
+          jsonFormat: date-time
+        examples: ["2025-02-24T14:06:00Z"]
+
+    # Table-level quality checks (can be executed via SQL in Fabric)
+    quality:
+      - type: sql
+        name: fill_le_order
+        description: Filled quantity must not exceed ordered quantity.
+        query: |
+          SELECT COUNT(*) AS violations
+          FROM trade_blotter
+          WHERE CAST(fill_qty AS BIGINT) > CAST(order_qty AS BIGINT)
+        mustBeZero: true
+
+      - type: sql
+        name: positive_price
+        description: Price must be strictly positive.
+        query: |
+          SELECT COUNT(*) AS violations
+          FROM trade_blotter
+          WHERE CAST(price AS DOUBLE) <= 0
+        mustBeZero: true
+
+      - type: sql
+        name: notional_consistency
+        description: Notional ≈ fill_qty * price within 1% of price.
+        query: |
+          SELECT COUNT(*) AS violations
+          FROM trade_blotter
+          WHERE ABS(gross_notional - (fill_qty * price)) > (0.01 * price)
+        maxAllowed: 1000   # allow minor rounding deltas in large batches
+
+      - type: sql
+        name: timestamps_ordered
+        description: Receive time must be less than or equal to execution time.
+        query: |
+          SELECT COUNT(*) AS violations
+          FROM trade_blotter
+          WHERE receive_time_utc > exec_time_utc
+        mustBeZero: true
+
+      - type: sql
+        name: allowed_values
+        description: Enum enforcement for venue/side/status/liquidity_flag.
+        query: |
+          SELECT COUNT(*) AS violations
+          FROM trade_blotter
+          WHERE venue NOT IN ('NYSE','NASDAQ','ARCA','IEX','EDGX','BATS')
+             OR side NOT IN ('BUY','SELL')
+             OR status NOT IN ('FILLED','PARTIAL','CANCELLED')
+             OR liquidity_flag NOT IN ('ADD','REMOVE')
+        mustBeZero: true
+
+datasets:
+  - id: trade_blotter_csv
+    name: Equity Trade Blotter (CSV)
+    format: csv
+    path: data/trade_blotter.csv           # adjust if path differs in Fabric/Repo
+    model: trade_blotter                   # binds to models.trade_blotter above
+    classification: Confidential
+    partitions:                            # shows Big Data practicality
+      - trade_date
+    slas:
+      availability: 99.9
+      freshness: PT15M
+      retention:
+        hot: P30D
+        warm: P365D
+        cold: P1825D
+    quality:
+      run_on_load: true
+      rules:
+        - ref: fill_le_order
+        - ref: positive_price
+        - ref: notional_consistency
+        - ref: timestamps_ordered
+        - ref: allowed_values
+
 lineage:
   sources:
-    - OMS
-    - BrokerDropCopy
+    - id: oms_dropcopy
+      name: OMS Drop Copy (Equities)
+      system: "SixRings OMS"
+      interface: "SFTP CSV (T+0 intraday batches)"
+      fields_map:
+        trade_id: tradeId
+        parent_order_id: parentId
+        child_order_id: childId
+        receive_time_utc: receivedUtc
+        instrument: symbol
+        side: side
+        order_qty: orderQty
+    - id: broker_fix
+      name: Broker Execution Reports (FIX)
+      system: "Executing Brokers"
+      interface: "FIX 4.4 Drop Copy"
+      fields_map:
+        exec_time_utc: transactTimeUtc
+        venue: venue
+        liquidity_flag: liqFlag
+        price: lastPx
+        fill_qty: lastQty
+        broker: brokerCode
+  transforms:
+    - name: normalize_times
+      description: Normalize inbound timestamps to UTC and compute latency.
+      business_logic: "latency_ms = (exec_time_utc - receive_time_utc) in milliseconds"
+    - name: compute_financials
+      description: Derive notional and commission.
+      business_logic: "gross_notional = fill_qty * price; commission = gross_notional * commission_bps / 10000"
+    - name: derive_dates
+      description: Derive trade_date and settlement_date.
+      business_logic: "trade_date = DATE(receive_time_utc); settlement_date = trade_date + 1 business day (T+1)"
+    - name: classify_liquidity
+      description: Normalize venue-specific maker/taker flags into ['ADD','REMOVE'].
   targets:
-    - TCA
-    - Risk
-    - ComplianceArchive
+    - id: tca_dashboard
+      name: TCA Dashboard (Power BI)
+      purpose: "Best-execution, slippage, venue performance"
+    - id: cat_reporting_staging
+      name: CAT Reporting Staging
+      purpose: "Downstream CAT submissions"
+    - id: aml_surveillance
+      name: AML Surveillance
+      purpose: "Alerting on anomalous trading patterns"
+  compliance_checkpoints:
+    - stage: ingest
+      requirement: "SEC 17a-3/4"
+      controls: ["WORM retention","UTC timestamps","primary key uniqueness","searchability by trade_id/date"]
+    - stage: transform
+      requirement: "FINRA 5310 / Reg NMS 605/606"
+      controls: ["TCA slippage checks","routing reason capture","venue enums"]
+    - stage: publish
+      requirement: "SEC Rule 613 (CAT)"
+      controls: ["parent/child linking","clock sync attestations","late/repair monitoring"]
+    - stage: consume
+      requirement: "AML (31 CFR 1023)"
+      controls: ["surveillance model outputs","SAR workflow hooks","access masking for PII"]
+
+schema_evolution:
+  policy: strict                  
+  breaking_changes_require:
+    - semver_major_bump
+    - compliance_review
+    - stakeholder_signoff
+  non_breaking_changes:
+    - add_optional_field
+    - widen_enum
+    - add_quality_rule
+
+validation:
+  when: on_ingest                  
+  engine: spark_sql                
+  fail_pipeline_on:
+    - error_rules
+  notify:
+    - channel: email
+      to: ["compliance@sixrings.com","tradeops@sixrings.com","dataeng@sixrings.com"]
