@@ -34,9 +34,9 @@ This project evolves in four phases, aligned with coursework deliverables:
 The project uses a **synthetic equity trade blotter dataset** (~1M rows), designed to simulate real-world trading operations.
 
 - **Source:** Generated for this project (not real financial data).  
-- **Sample:** [trade_blotter_sample_50k.csv](data/trade_blotter_sample_50k.csv)  
+- **Sample:** [trade_blotter.csv](data/trade_blotter.csv)  
 - **Schema:** [trade_blotter_schema.json](data/trade_blotter_schema.json)  
-- **Data Contract:** [trade_blotter_contract.yaml](data/data_contract_trade_blotter.yaml)  
+- **Data Contract:** [datacontract.yaml](data/datacontract.yaml)  
 
 ---
 
