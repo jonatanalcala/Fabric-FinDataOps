@@ -6,7 +6,7 @@ It demonstrates how financial institutions can manage compliance, automate infra
 ---
 
 ## Project Roadmap
-This project evolves in four phases, aligned with coursework deliverables:
+This project evolves in four phases:
 
 1. **Phase 1 – Governance Framework**  
    - Define compliance requirements (SOX, PCI-DSS, AML, GDPR).  
