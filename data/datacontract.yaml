@@ -1,0 +1,62 @@
+openDataContract: 0.9.0
+info:
+  title: Equity Trade Blotter
+  version: "1.0.0"
+  owner: trading-ops
+  domain: execution
+  description: Synthetic trade blotter for execution analytics and governance demos.
+servers:
+  - id: s3-dev
+    type: object-store
+    url: s3://rb-dev/trades/
+datasets:
+  - id: equity_trade_blotter
+    schema: ./trade_blotter_schema.json
+    partitions:
+      - trade_date
+    classification: Confidential
+    slas:
+      availability: 99.9
+      freshness: PT5M
+    consumers:
+      - analytics
+      - compliance
+      - risk
+policies:
+  rbac:
+    roles:
+      - name: trader
+        read: true
+        write: false
+        pii_masked: true
+      - name: compliance
+        read: true
+        write: false
+        pii_masked: false
+      - name: devops
+        read: true
+        write: true
+        pii_masked: true
+  retention:
+    hot: P30D
+    warm: P365D
+    cold: P1825D
+quality:
+  rules:
+    - name: positive_price
+      severity: error
+      expression: price > 0
+    - name: fill_le_order
+      severity: error
+      expression: fill_qty <= order_qty
+    - name: time_ordering
+      severity: warn
+      expression: receive_time_utc <= exec_time_utc
+lineage:
+  sources:
+    - OMS
+    - BrokerDropCopy
+  targets:
+    - TCA
+    - Risk
+    - ComplianceArchive
