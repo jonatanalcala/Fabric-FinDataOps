@@ -1,0 +1,262 @@
+{
+  "name": "equity_trade_blotter",
+  "primary_key": [
+    "trade_id"
+  ],
+  "columns": [
+    {
+      "name": "trade_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "parent_order_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "child_order_id",
+      "type": "string",
+      "required": false
+    },
+    {
+      "name": "acct_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "client_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "trader_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "instrument",
+      "type": "string",
+      "required": true,
+      "constraints": {
+        "pattern": "^[A-Z.]{1,8}$"
+      }
+    },
+    {
+      "name": "venue",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "NYSE",
+        "NASDAQ",
+        "ARCA",
+        "IEX",
+        "EDGX",
+        "BATS"
+      ]
+    },
+    {
+      "name": "side",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "BUY",
+        "SELL"
+      ]
+    },
+    {
+      "name": "order_type",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "LIMIT",
+        "MARKET",
+        "ICEBERG",
+        "PEG",
+        "MIDPOINT",
+        "POST_ONLY"
+      ]
+    },
+    {
+      "name": "tif",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "DAY",
+        "IOC",
+        "FOK",
+        "GTC"
+      ]
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "USD"
+      ]
+    },
+    {
+      "name": "order_qty",
+      "type": "int",
+      "required": true,
+      "constraints": {
+        "min": 1
+      }
+    },
+    {
+      "name": "fill_qty",
+      "type": "int",
+      "required": true,
+      "constraints": {
+        "min": 0
+      }
+    },
+    {
+      "name": "price",
+      "type": "float",
+      "required": true,
+      "constraints": {
+        "min": 0.0001
+      }
+    },
+    {
+      "name": "gross_notional",
+      "type": "float",
+      "required": true,
+      "constraints": {
+        "min": 0.0
+      }
+    },
+    {
+      "name": "commission_bps",
+      "type": "float",
+      "required": true,
+      "constraints": {
+        "min": 0.0,
+        "max": 100.0
+      }
+    },
+    {
+      "name": "commission",
+      "type": "float",
+      "required": true,
+      "constraints": {
+        "min": 0.0
+      }
+    },
+    {
+      "name": "slippage_bps",
+      "type": "float",
+      "required": true
+    },
+    {
+      "name": "receive_time_utc",
+      "type": "timestamp",
+      "required": true
+    },
+    {
+      "name": "exec_time_utc",
+      "type": "timestamp",
+      "required": true
+    },
+    {
+      "name": "latency_ms",
+      "type": "float",
+      "required": true,
+      "constraints": {
+        "min": 0.0
+      }
+    },
+    {
+      "name": "algo_tag",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "VWAP",
+        "TWAP",
+        "POV",
+        "SNIPER",
+        "DARKPOOL",
+        "SOR",
+        "MANUAL"
+      ]
+    },
+    {
+      "name": "broker",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "GS",
+        "MS",
+        "JPM",
+        "BAC",
+        "CITI",
+        "UBS",
+        "CS",
+        "BARC",
+        "DB",
+        "BAML"
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "FILLED",
+        "PARTIAL",
+        "CANCELLED"
+      ]
+    },
+    {
+      "name": "liquidity_flag",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "ADD",
+        "REMOVE"
+      ]
+    },
+    {
+      "name": "country",
+      "type": "string",
+      "required": true,
+      "enum": [
+        "US"
+      ]
+    },
+    {
+      "name": "trade_date",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "settlement_date",
+      "type": "date",
+      "required": true
+    }
+  ],
+  "quality_rules": [
+    {
+      "name": "non_negative_qty",
+      "expr": "order_qty>=0 and fill_qty>=0"
+    },
+    {
+      "name": "fill_le_order",
+      "expr": "fill_qty<=order_qty"
+    },
+    {
+      "name": "positive_price",
+      "expr": "price>0"
+    },
+    {
+      "name": "times_ordered",
+      "expr": "receive_time_utc<=exec_time_utc"
+    },
+    {
+      "name": "notional_consistency",
+      "expr": "abs(gross_notional - fill_qty*price) <= 0.01*price"
+    }
+  ]
+}
