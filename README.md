@@ -52,8 +52,8 @@ The project uses a **synthetic equity trade blotter dataset** (~1M rows), design
 ## 📂 Repo Structure
 ```text
 Fabric-FinDataOps/
-│── README.md                 # Project overview + roadmap
-│── LICENSE                   # MIT 
+│── README.md               
+│── LICENSE                  
 │
 ├── data/
 │    ├── trade_blotter.csv
